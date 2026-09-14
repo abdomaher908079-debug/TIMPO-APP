@@ -1,37 +1,83 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Play, CheckCircle, Flame, Trophy, Clock, Zap, Menu, X, 
-  Calendar, BarChart2, Plus, Sparkles, Smartphone,
-  Award, Brain, CheckSquare, Trash2
+  Play, Pause, RotateCcw, CheckCircle, Flame, Trophy, Clock, Zap, Menu, X, 
+  BarChart2, Plus, Sparkles, Smartphone, Award, Brain, Trash2, CheckSquare, Maximize2
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import { Task, UserStats } from './types';
 
 export default function App() {
   // Navigation & Drawer State
-  const [activeTab, setActiveTab] = useState<'today' | 'history' | 'analytics' | 'badges'>('today');
+  const [activeTab, setActiveTab] = useState<'today' | 'analytics' | 'badges'>('today');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   
-  // App Data State (شاشة فارغة تماماً للمستخدم الجديد)
-  const [tasks, setTasks] = useState<Task[]>([]);
-
-  const [stats, setStats] = useState<UserStats>({
-    streak: 0,
-    lastCompletedDate: '',
-    xp: 0,
-    level: 1,
-    unlockedBadges: []
+  // Persistence using localStorage
+  const [tasks, setTasks] = useState<Task[]>(() => {
+    const saved = localStorage.getItem('tempo_tasks');
+    return saved ? JSON.parse(saved) : [];
   });
 
+  const [stats, setStats] = useState<UserStats>(() => {
+    const saved = localStorage.getItem('tempo_stats');
+    return saved ? JSON.parse(saved) : {
+      streak: 0,
+      lastCompletedDate: '',
+      xp: 0,
+      level: 1,
+      unlockedBadges: []
+    };
+  });
+
+  // Focus Timer States
   const [activeTask, setActiveTask] = useState<Task | null>(null);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  
-  // New Task Inputs
+  const [isFocusModeOpen, setIsFocusModeOpen] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(25 * 60);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+
+  // New Task Form States
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskCategory, setNewTaskCategory] = useState('Study');
-  const [newTaskDuration, setNewTaskDuration] = useState(30);
+  const [newTaskDuration, setNewTaskDuration] = useState(25);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-  // PWA Install Prompt Listener
+  // Sync with LocalStorage
+  useEffect(() => {
+    localStorage.setItem('tempo_tasks', JSON.stringify(tasks));
+  }, [tasks]);
+
+  useEffect(() => {
+    localStorage.setItem('tempo_stats', JSON.stringify(stats));
+  }, [stats]);
+
+  // Update default active task
+  useEffect(() => {
+    const incomplete = tasks.filter(t => !t.completed);
+    if (incomplete.length > 0 && !activeTask) {
+      setActiveTask(incomplete[0]);
+    } else if (incomplete.length === 0) {
+      setActiveTask(null);
+    }
+  }, [tasks]);
+
+  // Focus Timer Interval
+  useEffect(() => {
+    let interval: any = null;
+    if (isTimerRunning && timerSeconds > 0) {
+      interval = setInterval(() => {
+        setTimerSeconds(prev => prev - 1);
+      }, 1000);
+    } else if (timerSeconds === 0 && isTimerRunning) {
+      setIsTimerRunning(false);
+      triggerCelebration();
+      if (activeTask) {
+        toggleTask(activeTask.id);
+      }
+    }
+    return () => clearInterval(interval);
+  }, [isTimerRunning, timerSeconds]);
+
+  // PWA Prompt Listener
   useEffect(() => {
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
@@ -39,43 +85,41 @@ export default function App() {
     });
   }, []);
 
-  // Update active task whenever tasks list changes
-  useEffect(() => {
-    const incompleteTasks = tasks.filter(t => !t.completed);
-    if (incompleteTasks.length > 0) {
-      setActiveTask(incompleteTasks[0]);
-    } else {
-      setActiveTask(null);
-    }
-  }, [tasks]);
+  const triggerCelebration = () => {
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 }
+    });
+  };
 
   const handleInstallApp = () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then(() => setDeferredPrompt(null));
     } else {
-      alert("لتثبيت التطبيق: اضغط على خيارات المتصفح (⋮ أو Share) ثم اختر 'Add to Home Screen'");
+      alert("لتثبيت التطبيق كـ App مستقل: اضغط خيارات المتصفح (⋮ أو Share) ثم 'Add to Home Screen'");
     }
   };
 
   const toggleTask = (id: string) => {
     setTasks(prev => prev.map(t => {
       if (t.id === id) {
-        const updatedStatus = !t.completed;
-        if (updatedStatus) {
-          // إضافة نقاط عند الإنجاز
+        const nextStatus = !t.completed;
+        if (nextStatus) {
+          triggerCelebration();
           setStats(s => {
-            const newXp = s.xp + 20;
+            const newXp = s.xp + 25;
             const newLevel = Math.floor(newXp / 100) + 1;
-            return { 
-              ...s, 
-              xp: newXp, 
+            return {
+              ...s,
+              xp: newXp,
               level: newLevel,
-              streak: s.streak === 0 ? 1 : s.streak 
+              streak: s.streak === 0 ? 1 : s.streak
             };
           });
         }
-        return { ...t, completed: updatedStatus };
+        return { ...t, completed: nextStatus };
       }
       return t;
     }));
@@ -84,14 +128,16 @@ export default function App() {
   const deleteTask = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setTasks(prev => prev.filter(t => t.id !== id));
+    if (activeTask?.id === id) {
+      setActiveTask(null);
+    }
   };
 
   const addTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
 
-    const currentTime = new Date();
-    const timeString = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     const newTask: Task = {
       id: Date.now().toString(),
@@ -105,27 +151,43 @@ export default function App() {
     };
 
     setTasks([...tasks, newTask]);
+    if (!activeTask) {
+      setActiveTask(newTask);
+      setTimerSeconds(newTask.duration * 60);
+    }
     setNewTaskTitle('');
   };
 
+  const startFocusForTask = (task: Task) => {
+    setActiveTask(task);
+    setTimerSeconds(task.duration * 60);
+    setIsFocusModeOpen(true);
+  };
+
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const smartReorganize = () => {
-    if (tasks.length === 0) {
-      alert("لا توجد مهام حالياً لإعادة ترتيبها!");
-      return;
-    }
+    if (tasks.length === 0) return;
     const sorted = [...tasks].sort((a, b) => Number(a.completed) - Number(b.completed));
     setTasks(sorted);
-    alert("تمت إعادة ترتيب المهام ذكياً!");
+    triggerCelebration();
   };
 
   const filteredTasks = selectedCategory === 'All' 
     ? tasks 
     : tasks.filter(t => t.category === selectedCategory);
 
+  // Progress to next Level (XP percentage)
+  const xpProgress = stats.xp % 100;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
       
-      {/* 1️⃣ NAVBAR - شريط علوي أنيق */}
+      {/* 1️⃣ NAVBAR */}
       <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button 
@@ -140,20 +202,27 @@ export default function App() {
           </h1>
         </div>
 
-        {/* إحصائيات مستخدم جديد (0 Days / Lvl 1) */}
+        {/* Level & Streak Stats */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full text-xs font-semibold border border-amber-400/20">
             <Flame className="w-4 h-4" />
-            <span>{stats.streak} Days</span>
+            <span>{stats.streak}d Streak</span>
           </div>
-          <div className="flex items-center gap-1.5 text-indigo-400 bg-indigo-400/10 px-3 py-1 rounded-full text-xs font-semibold border border-indigo-400/20">
-            <Trophy className="w-4 h-4" />
-            <span>Lvl {stats.level} ({stats.xp} XP)</span>
+          
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-1.5 text-indigo-400 bg-indigo-400/10 px-3 py-1 rounded-full text-xs font-semibold border border-indigo-400/20">
+              <Trophy className="w-4 h-4" />
+              <span>Lvl {stats.level}</span>
+            </div>
+            {/* XP Bar */}
+            <div className="w-16 h-1 bg-slate-800 rounded-full mt-1 overflow-hidden">
+              <div className="h-full bg-indigo-500 transition-all duration-300" style={{ width: `${xpProgress}%` }}></div>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* 2️⃣ SIDEBAR DRAWER - القائمة الجانبية */}
+      {/* 2️⃣ SIDEBAR DRAWER */}
       {isSidebarOpen && (
         <div className="fixed inset-0 z-50 flex">
           <div 
@@ -176,7 +245,6 @@ export default function App() {
                 </button>
               </div>
 
-              {/* أزرار التبويبات الرئيسية */}
               <nav className="space-y-1.5">
                 <button 
                   onClick={() => { setActiveTab('today'); setIsSidebarOpen(false); }}
@@ -203,9 +271,8 @@ export default function App() {
 
               <hr className="border-slate-800" />
 
-              {/* تصفية التصنيفات */}
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">تصفية حسب التصنيف</label>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">تصفية التصنيفات</label>
                 <div className="flex flex-wrap gap-2">
                   {['All', 'Study', 'Health', 'Planning', 'General'].map((cat) => (
                     <button
@@ -221,7 +288,6 @@ export default function App() {
 
               <hr className="border-slate-800" />
 
-              {/* خيارات إضافية */}
               <div className="space-y-2">
                 <button 
                   onClick={() => { smartReorganize(); setIsSidebarOpen(false); }}
@@ -241,7 +307,7 @@ export default function App() {
             </div>
 
             <div className="text-xs text-slate-500 text-center pt-4 border-t border-slate-800">
-              tempo. productivity app v1.3
+              tempo. productivity app v2.0
             </div>
           </div>
         </div>
@@ -250,14 +316,14 @@ export default function App() {
       {/* 3️⃣ MAIN CONTENT */}
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
 
-        {/* 🔹 تبويب اليوم (Today Tab) */}
+        {/* TODAY TAB */}
         {activeTab === 'today' && (
           <>
-            {/* نموذج إضافة مهمة جديدة */}
-            <form onSubmit={addTask} className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
+            {/* New Task Form */}
+            <form onSubmit={addTask} className="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3 shadow-lg">
               <input 
                 type="text"
-                placeholder="ما هي مهمتك التالية؟..."
+                placeholder="ما هي المهمة القادمة؟..."
                 value={newTaskTitle}
                 onChange={(e) => setNewTaskTitle(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 text-slate-200 placeholder-slate-500"
@@ -286,20 +352,21 @@ export default function App() {
                   <span className="text-xs text-slate-400">دقيقة</span>
                 </div>
 
-                <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl transition text-xs font-semibold flex items-center gap-1">
+                <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl transition text-xs font-semibold flex items-center gap-1 shadow-md shadow-indigo-600/30">
                   <Plus className="w-4 h-4" /> إضافة
                 </button>
               </div>
             </form>
 
-            {/* بطاقة المهمة الحالية (تظهر فقط لو في مهمة قائمة) */}
+            {/* Focus Card Hero */}
             {activeTask ? (
-              <div className="bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 border border-indigo-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+              <div className="bg-gradient-to-br from-indigo-950/70 via-slate-900 to-slate-900 border border-indigo-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden">
                 <div className="flex justify-between items-start mb-4">
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping"></span>
                     التركيز الحالي (NOW)
                   </span>
-                  <span className="text-sm font-mono text-slate-400">{activeTask.startTime} ({activeTask.duration} min)</span>
+                  <span className="text-sm font-mono text-slate-400">{activeTask.startTime} ({activeTask.duration} دقيقة)</span>
                 </div>
 
                 <h2 className="text-xl font-bold text-white mb-2">{activeTask.title}</h2>
@@ -308,21 +375,23 @@ export default function App() {
                   التصنيف: <span className="text-slate-200">{activeTask.category}</span>
                 </p>
 
-                <button className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition shadow-lg shadow-indigo-600/20">
+                <button 
+                  onClick={() => startFocusForTask(activeTask)}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition shadow-lg shadow-indigo-600/25"
+                >
                   <Play className="w-5 h-5 fill-current" />
                   بدء وضع التركيز (Focus Mode)
                 </button>
               </div>
             ) : (
-              /* رسالة ترحيبية للمستخدم الجديد عندما تكون القائمة فارغة */
-              <div className="text-center py-10 bg-slate-900/40 rounded-2xl border border-dashed border-slate-800 p-6">
+              <div className="text-center py-12 bg-slate-900/40 rounded-2xl border border-dashed border-slate-800 p-6">
                 <CheckSquare className="w-12 h-12 text-slate-600 mx-auto mb-3" />
                 <h3 className="text-base font-bold text-slate-300 mb-1">لا توجد مهام حالياً</h3>
-                <p className="text-xs text-slate-500">ابدأ بإضافة أول مهمة لك في النموذج أعلاه لتنظيم يومك!</p>
+                <p className="text-xs text-slate-500">أضف مهمتك الأولى أعلاه لتنظيم يومك وزيادة إنتاجيتك!</p>
               </div>
             )}
 
-            {/* رأس وتفاصيل قائمة المهام */}
+            {/* Task List Header */}
             {filteredTasks.length > 0 && (
               <>
                 <div className="flex items-center justify-between pt-2">
@@ -365,12 +434,20 @@ export default function App() {
                         </div>
                       </div>
 
-                      <button 
-                        onClick={(e) => deleteTask(task.id, e)}
-                        className="p-1.5 text-slate-600 hover:text-rose-400 transition rounded-lg hover:bg-slate-800"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); startFocusForTask(task); }}
+                          className="p-1.5 text-slate-400 hover:text-indigo-400 transition rounded-lg hover:bg-slate-800"
+                        >
+                          <Maximize2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={(e) => deleteTask(task.id, e)}
+                          className="p-1.5 text-slate-600 hover:text-rose-400 transition rounded-lg hover:bg-slate-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -379,50 +456,8 @@ export default function App() {
           </>
         )}
 
-        {/* 🔹 تبويب الإحصائيات (Analytics Tab) */}
+        {/* ANALYTICS TAB */}
         {activeTab === 'analytics' && (
           <div className="space-y-4">
             <h2 className="text-xl font-bold text-white mb-4">تحليل الإنتاجية والأداء</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                <span className="text-xs text-slate-400 block">إجمالي المهام المكتملة</span>
-                <span className="text-2xl font-bold text-indigo-400">{tasks.filter(t => t.completed).length}</span>
-              </div>
-              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                <span className="text-xs text-slate-400 block">معدل الإنجاز</span>
-                <span className="text-2xl font-bold text-emerald-400">
-                  {tasks.length > 0 ? Math.round((tasks.filter(t => t.completed).length / tasks.length) * 100) : 0}%
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 🔹 تبويب الإنجازات (Badges Tab) */}
-        {activeTab === 'badges' && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold text-white mb-4">الأوسمة والإنجازات</h2>
-            {stats.unlockedBadges.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
-                {stats.unlockedBadges.map((badge, idx) => (
-                  <div key={idx} className="bg-slate-900 p-4 rounded-xl border border-amber-500/20 flex items-center gap-3">
-                    <Award className="w-8 h-8 text-amber-400" />
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-200">{badge}</h4>
-                      <span className="text-[10px] text-slate-500">مفتوح</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-slate-500 bg-slate-900/30 rounded-xl border border-slate-800">
-                أنجز مهامك الأولى لفتح أوسمتك الأولى!
-              </div>
-            )}
-          </div>
-        )}
-
-      </main>
-    </div>
-  );
-                    }
+            <div className="grid grid-cols-2 
