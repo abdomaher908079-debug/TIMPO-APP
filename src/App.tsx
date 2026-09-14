@@ -316,8 +316,6 @@ interface Post {
   timestamp: string
   likes: number;
 }
-
-export default function App() {
   // User Profile States (Local storage, no server required)
   const [userName, setUserName] = useState<string>(() => localStorage.getItem('tempo_user_name') || 'Abdullah Maher');
   const [userAvatar, setUserAvatar] = useState<string>(() => localStorage.getItem('tempo_user_avatar') || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop');
