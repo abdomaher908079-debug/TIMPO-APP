@@ -1,4 +1,34 @@
 import React, { useState, useEffect } from 'react';
+im
+import { 
+  CheckCircle2, 
+  Circle, 
+  Plus, 
+  Clock, 
+  Flame, 
+  Trophy, 
+  BarChart3, 
+  Menu, 
+  X, 
+  Play, 
+  Pause, 
+  RotateCcw, 
+  Sparkles,
+  Target,
+  Brain,
+  Trash2,
+  Zap,
+  User,
+  Image as ImageIcon,
+  Sun,
+  ShieldCheck,
+  Send,
+  Upload
+} from 'lucide-react';
+import confetti from 'canvas-confetti';
+import
+  
+  React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, 
   Circle, 
@@ -268,34 +298,6 @@ export default function App() {
   const completedCount = tasks.filter(t => t.completed).length;
   const totalTasks = tasks.length;
   const progressPercentage = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
-  import React, { useState, useEffect } from 'react';
-import { 
-  CheckCircle2, 
-  Circle, 
-  Plus, 
-  Clock, 
-  Flame, 
-  Trophy, 
-  BarChart3, 
-  Menu, 
-  X, 
-  Play, 
-  Pause, 
-  RotateCcw, 
-  Sparkles,
-  Target,
-  Brain,
-  Trash2,
-  Zap,
-  User,
-  Image as ImageIcon,
-  Sun,
-  ShieldCheck,
-  Send,
-  Upload
-} from 'lucide-react';
-import confetti from 'canvas-confetti';
-
 interface Task {
   id: string;
   title: string;
@@ -311,7 +313,7 @@ interface Post {
   avatar: string;
   content: string;
   image?: string;
-  timestamp: string;
+  timestamp: string
   likes: number;
 }
 
